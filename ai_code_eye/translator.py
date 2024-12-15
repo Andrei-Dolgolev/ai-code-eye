@@ -13,52 +13,87 @@ class CodeTranslator:
         self.client = openai.OpenAI(api_key=settings.openai_api_key)
         self.model = settings.model_name
         
-    def translate_code(self, code: str, source_lang: str, target_lang: str, file_name: str) -> (str, str):
-        prompt = f"""You are a code translation assistant.
+    def translate_code(self, code: str, source_lang: str, target_lang: str, file_name: str, project_structure: str) -> (str, str):
+        dependencies_info = get_file_dependencies(code)
+        file_name_with_js_extension = str(Path(file_name).with_suffix('.js'))
+        
+        prompt = f"""You are an expert code translator specializing in converting Java code to modern ES6 JavaScript. 
 
-Translate the following {source_lang} code to {target_lang}. The code is from the file '{file_name}'.
+Translate the following {source_lang} code to {target_lang}. The code is from the file '{file_name}'. This file is part of a larger project with the following structure:
 
-Maintain the same functionality and structure, including class definitions and static methods.
+{project_structure}
 
-For {target_lang} output:
-- Convert Java classes to ES6 JavaScript classes
-- Maintain method signatures and behavior
-- Use modern JavaScript conventions
-- Ensure that static methods in Java are also static in JavaScript
-- Export classes properly for module usage
+Maintain the same functionality and structure, including class definitions, method signatures, and access modifiers. Ensure that the translated code integrates seamlessly with the rest of the project.
 
-Provide a brief description of what this code does, followed by the translated code in a code block.
+**Instructions for {target_lang} code**:
+- Convert Java classes to ES6 classes using the `class` syntax.
+- Use proper `import` and `export` statements to handle dependencies between modules.
+- Replace Java-specific libraries and APIs with appropriate JavaScript or Web APIs.
+- Maintain static methods and properties appropriately.
+- Use modern JavaScript conventions (e.g., arrow functions, template literals) where suitable.
+- Ensure that all methods and properties are correctly bound, especially when using `this`.
+- **Adjust canvas initialization and rendering logic to use the HTML5 Canvas API, ensuring the canvas element and context are properly set up.**
+- **Handle event listeners appropriately, binding them with the correct context to maintain 'this' references.**
+- Include necessary constructors and super() calls if inheritance is involved.
+- **Translate Java's exception handling (`try`, `catch`, `finally`, `throws`) appropriately to JavaScript, ensuring that all potential errors are properly managed.**
+- **Adapt multithreaded or asynchronous Java code using JavaScript's asynchronous patterns (e.g., Promises, async/await), ensuring non-blocking operations.**
+- **For Java interfaces and abstract classes, convert them into JavaScript classes or use ES6 class inheritance, and provide implementations for all abstract methods.**
+- **Translate Java's static variables (especially `final` constants) to JavaScript's `const` or static class properties as appropriate.**
+- **Maintain the project's module structure, ensuring that namespaces or packages are appropriately translated using ES6 modules.**
+- **While JavaScript is dynamically typed, ensure that variable and method usages remain consistent. If necessary, include JSDoc comments to describe types for better readability and maintainability.**
+- **Replace any third-party Java libraries with suitable JavaScript libraries or provide placeholders/comments where manual adjustment is needed.**
+- **After translation, ensure that the code includes necessary setup for testing or includes comments on how to test the functionality.**
+- **Modify GUI interactions and system resource access to utilize appropriate web APIs suitable for a browser environment.**
 
-Important:
-- Only translate the code provided.
-- Do not include code from other files or any additional code not present in the input.
-- Do not refer to or assume the existence of external classes or methods unless they are explicitly defined in the provided code.
+**Important**:
+- Only translate the code provided in the 'Code to Translate' section.
+- Do not include code from other files unless it's necessary for context and is specified in the 'Dependencies' section.
+- If external classes or methods from other files are referenced, assume they have been translated similarly and import them accordingly.
+- Do not add any additional functionality or logic not present in the original code.
+- **Ensure that the translated code is functional within a JavaScript environment, making necessary adjustments for environment-specific logic.**
+- **Address any Java-specific constructs that do not have direct equivalents in JavaScript, adapting them appropriately to maintain functionality.**
 
-{source_lang} code from '{file_name}':
+**Code to Translate ({source_lang} code from '{file_name}')**:
 {code}
+
+**Dependencies**:
+{dependencies_info}
+
+**Output**:
+- First, provide a brief description of what this code does.
+- Then, provide the translated code in a code block, specifying the language (JavaScript) and the file name, like so:
+
+\`\`\`javascript:{file_name_with_js_extension}
+// Translated code here
+\`\`\`
+
+Do not include any additional explanations outside the code block.
 """
         
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a code translation assistant who accurately translates code while maintaining functionality and proper class structure. Provide a brief description and the translated code. Ensure that only code from the provided input is translated."},
+                    {"role": "system", "content": "You are an expert code translator who produces accurate and functional code translations while maintaining project structure and dependencies, class structure, method signatures."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=2048
+                max_tokens=3000
             )
             response_text = response.choices[0].message.content.strip()
 
-            # Extract the translated code from the last code block
-            code_snippets = re.findall(r'```(?:\w+)?\n(.*?)```', response_text, re.DOTALL)
-            if code_snippets:
-                translated_code = code_snippets[-1].strip()
-                # Remove all code blocks to extract the description
-                description = re.sub(r'```(?:\w+)?\n.*?```', '', response_text, flags=re.DOTALL).strip()
+            # Extract the translated code from the code block with the file name
+            code_pattern = rf'```javascript:{re.escape(file_name_with_js_extension)}\n(.*?)```'
+            match = re.search(code_pattern, response_text, re.DOTALL)
+            if match:
+                translated_code = match.group(1).strip()
             else:
-                translated_code = ''
-                description = response_text.strip()
+                # Fallback to extract any JavaScript code block
+                code_snippets = re.findall(r'```javascript\n(.*?)```', response_text, re.DOTALL)
+                translated_code = code_snippets[-1].strip() if code_snippets else ''
+
+            # Remove code blocks to extract the description
+            description = re.sub(r'```.*?```', '', response_text, flags=re.DOTALL).strip()
 
             return translated_code, description
         except Exception as e:
@@ -92,7 +127,7 @@ Important:
 
                 # Directly translate the entire file without splitting
                 translated_code, description = self.translate_code(
-                    source_code, source_lang, target_lang, str(relative_path)
+                    source_code, source_lang, target_lang, str(relative_path), get_project_structure(source_dir)
                 )
 
                 # Write the translated code to the output file
@@ -117,3 +152,18 @@ Important:
                 f.write(f"File: {file_path}\n")
                 f.write(f"Description:\n{description}\n")
                 f.write("-" * 40 + "\n")
+
+def get_project_structure(source_dir: Path) -> str:
+    structure = ""
+    for path in sorted(source_dir.rglob("*.java")):
+        relative_path = path.relative_to(source_dir)
+        structure += f"- {relative_path}\n"
+    return structure
+
+def get_file_dependencies(code: str) -> str:
+    # Simple regex to find import statements (can be enhanced)
+    imports = re.findall(r'import\s+([a-zA-Z0-9_.]+);', code)
+    dependencies = ""
+    for imp in imports:
+        dependencies += f"- {imp}\n"
+    return dependencies if dependencies else "None"

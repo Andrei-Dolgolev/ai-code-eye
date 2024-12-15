@@ -1,55 +1,67 @@
 from pathlib import Path
-from typing import List, Optional
-import openai
-from rich.console import Console
+from typing import List
 from rich.progress import Progress
+from rich.console import Console
+import openai
 from .config import Settings
-from .utils import estimate_tokens
 
 console = Console()
 
 class CodeTranslator:
     def __init__(self, settings: Settings):
-        self.settings = settings
-        openai.api_key = settings.openai_api_key
-
-    def count_tokens(self, text: str) -> int:
-        return estimate_tokens(text)
-
-    def split_into_chunks(self, text: str) -> List[str]:
-        """Split text into chunks based on token count."""
-        chunks = []
-        current_chunk = []
-        current_tokens = 0
+        self.client = openai.OpenAI(api_key=settings.openai_api_key)
+        self.model = settings.model_name
         
-        for line in text.split('\n'):
-            line_tokens = self.count_tokens(line)
-            if current_tokens + line_tokens > self.settings.chunk_size:
-                chunks.append('\n'.join(current_chunk))
-                current_chunk = [line]
-                current_tokens = line_tokens
-            else:
-                current_chunk.append(line)
-                current_tokens += line_tokens
+    def translate_code(self, code: str, source_lang: str, target_lang: str) -> str:
+        prompt = f"""Translate the following {source_lang} code to {target_lang}.
+        Maintain the same functionality and structure, including class definitions and static methods.
+        For JavaScript output:
+        - Convert Java classes to ES6 JavaScript classes
+        - Maintain method signatures and behavior
+        - Use modern JavaScript conventions
+        - Ensure that static methods in Java are also static in JavaScript
+        - Export classes properly for module usage
+        Only return the translated code without any explanations.
         
-        if current_chunk:
-            chunks.append('\n'.join(current_chunk))
-        
-        return chunks
-
-    def translate_code(self, source_code: str, source_lang: str, target_lang: str) -> str:
-        prompt = self.settings.get_translation_prompt(source_code, source_lang, target_lang)
+        {source_lang} code:
+        {code}
+        """
         
         try:
-            response = openai.ChatCompletion.create(
-                model=self.settings.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.settings.temperature,
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a code translation assistant. Translate code accurately while maintaining functionality and proper class structure."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=2048
             )
-            return response['choices'][0]['message']['content']
+            return response.choices[0].message.content.strip()
         except Exception as e:
-            console.print(f"[red]Error during translation: {e}[/red]")
-            return ""
+            console.print(f"[red]Error during translation: {str(e)}[/red]")
+            raise
+
+    def split_into_chunks(self, code: str, max_chunk_size: int = 1000) -> List[str]:
+        # Simple splitting by newlines for now
+        lines = code.split('\n')
+        chunks = []
+        current_chunk = []
+        current_size = 0
+        
+        for line in lines:
+            line_size = len(line)
+            if current_size + line_size > max_chunk_size and current_chunk:
+                chunks.append('\n'.join(current_chunk))
+                current_chunk = []
+                current_size = 0
+            current_chunk.append(line)
+            current_size += line_size
+            
+        if current_chunk:
+            chunks.append('\n'.join(current_chunk))
+            
+        return chunks
 
     def translate_project(self, source_dir: Path, output_dir: Path, 
                          source_ext: str, target_ext: str,
@@ -81,4 +93,4 @@ class CodeTranslator:
                     translated_chunks.append(translated_chunk)
                 
                 target_file.write_text('\n'.join(translated_chunks), encoding='utf-8')
-                progress.advance(task) 
+                progress.advance(task)

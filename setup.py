@@ -16,7 +16,7 @@ setup(
     version=AI_CODE_EYE_VERSION,
     packages=find_packages(),
     install_requires=[
-        "openai>=0.27.0",
+        "openai>=1.0.0",
         "requests>=2.20.0",
         "typer>=0.9.0",
         "rich>=13.0.0",

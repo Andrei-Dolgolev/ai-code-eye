@@ -49,3 +49,6 @@ Thumbs.db
 output/
 translated/
 .ai-code-eye/  # Add project config directory
+
+# Output directories
+ts_output/

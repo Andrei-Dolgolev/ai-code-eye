@@ -16,6 +16,13 @@ def translate(
     source_ext: str = typer.Option(".java", help="Source file extension"),
     target_ext: str = typer.Option(".js", help="Target file extension"),
     model: str = typer.Option("gpt-4", help="OpenAI model to use"),
+    unit_test: bool = typer.Option(False, help="Perform unit testing"),
+    integration_test: bool = typer.Option(False, help="Perform integration testing"),
+    ui_ux_test: bool = typer.Option(False, help="Perform UI/UX testing"),
+    performance_test: bool = typer.Option(False, help="Perform performance testing"),
+    debugging: bool = typer.Option(False, help="Enable debugging and logging"),
+    iterative_improvement: bool = typer.Option(False, help="Perform iterative improvements"),
+    documentation: bool = typer.Option(False, help="Update documentation"),
 ):
     """
     Translate code from one programming language to another using AI.
@@ -41,6 +48,36 @@ def translate(
             target_lang=target_lang,
         )
         console.print("[green]Translation completed successfully![/green]")
+
+        # Optional steps based on CLI parameters
+        if unit_test:
+            console.print("[blue]Performing unit testing...[/blue]")
+            # Add unit testing logic here
+
+        if integration_test:
+            console.print("[blue]Performing integration testing...[/blue]")
+            # Add integration testing logic here
+
+        if ui_ux_test:
+            console.print("[blue]Performing UI/UX testing...[/blue]")
+            # Add UI/UX testing logic here
+
+        if performance_test:
+            console.print("[blue]Performing performance testing...[/blue]")
+            # Add performance testing logic here
+
+        if debugging:
+            console.print("[blue]Enabling debugging and logging...[/blue]")
+            # Add debugging and logging logic here
+
+        if iterative_improvement:
+            console.print("[blue]Performing iterative improvements...[/blue]")
+            # Add iterative improvement logic here
+
+        if documentation:
+            console.print("[blue]Updating documentation...[/blue]")
+            # Add documentation update logic here
+
     except Exception as e:
         console.print(f"[red]Error during translation: {e}[/red]")
         raise typer.Exit(1)

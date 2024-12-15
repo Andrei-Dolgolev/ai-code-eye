@@ -1,4 +1,4 @@
-# AI Code Eye
+# AI Code Eye 👁️ (Eye) + 🤖 (AI) = 👁️🤖
 
 AI Code Eye is a CLI tool that translates code from one programming language to another using AI technology.
 

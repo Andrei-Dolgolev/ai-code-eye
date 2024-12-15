@@ -3,6 +3,11 @@
 *.env
 !sample.env  # Allow sample.env to be committed
 
+.secrets/
+.idea/
+.vscode/
+.DS_Store
+
 # Python
 __pycache__/
 *.py[cod]
